@@ -1,0 +1,30 @@
+name: Executar Estacao Meteorologica
+
+on:
+  schedule:
+    # Agenda a execução automática de 3 em 3 horas
+    - cron: '0 */3 * * *'
+  workflow_dispatch: # Permite que você clique em um botão para testar manualmente a qualquer hora
+
+jobs:
+  run-script:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Baixar codigo do repositorio
+        uses: actions/checkout@v3
+
+      - name: Configurar Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+
+      - name: Instalar dependencias
+        run: |
+          python -m pip install --upgrade pip
+          pip install requests
+
+      - name: Executar script
+        env:
+          OPENWEATHER_KEY: ${{ secrets.OPENWEATHER_KEY }}
+          THINGSPEAK_KEY: ${{ secrets.THINGSPEAK_KEY }}
+        run: python clima_thingspeak.py
