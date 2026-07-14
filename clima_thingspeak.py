@@ -16,24 +16,24 @@ def obter_previsao_proximas_24h():
     
     try:
         resposta = requests.get(url)
-        dados = response_json = resposta.json()
+        dados = resposta.json()
         
         if resposta.status_code == 200:
             lista_previsoes = dados.get('list', [])
             updates = []
             
-            # Pega exatamente os próximos 8 pontos de previsão (8 pontos x 3 horas = 24 horas para frente!)
+            # Pega exatamente os próximos 8 pontos de previsão (8 x 3h = 24 horas)
             proximos_pontos = lista_previsoes[:8]
             
             for item in proximos_pontos:
                 timestamp = item.get('dt')
-                # Converte para formato ISO esperado pelo ThingSpeak
+                # Converte para formato esperado pelo ThingSpeak (ISO 8601)
                 data_hora_iso = datetime.utcfromtimestamp(timestamp).strftime('%Y-%m-%d %H:%M:%S')
                 
                 umidade = item['main']['humidity']
                 chuva = item.get('rain', {}).get('3h', 0.0)
                 
-                # Estimativa simplificada de radiação solar
+                # Cálculo de radiação solar
                 nuvens = item.get('clouds', {}).get('all', 0)
                 hora_ponto = datetime.utcfromtimestamp(timestamp).hour
                 
@@ -51,7 +51,7 @@ def obter_previsao_proximas_24h():
                     "field3": round(radiacao, 1)
                 })
             
-            print(f"Previsão de {len(updates)} pontos (próximas 24h) coletada com sucesso!")
+            print(f"Sucesso! {len(updates)} pontos coletados para as próximas 24h.")
             return updates
         else:
             print(f"Erro na API OpenWeather: {dados.get('message')}")
@@ -76,12 +76,14 @@ def enviar_lote_thingspeak(updates):
     
     try:
         resposta = requests.post(url, data=json.dumps(payload), headers=headers)
+        print(f"Status do ThingSpeak: {resposta.status_code}")
+        print(f"Resposta do ThingSpeak: {resposta.text}")
         if resposta.status_code in [201, 202]:
-            print("Sucesso! Próximas 24h enviadas para o ThingSpeak.")
+            print("Envio em lote bem-sucedido!")
         else:
-            print(f"Erro no envio: {resposta.status_code} - {resposta.text}")
+            print("Falha no envio em lote.")
     except Exception as e:
-        print(f"Falha de conexão com o ThingSpeak ao enviar lote: {e}")
+        print(f"Falha de conexão com o ThingSpeak: {e}")
 
 if __name__ == "__main__":
     pontos = obter_previsao_proximas_24h()
