@@ -3,7 +3,7 @@ name: Executar Estacao Meteorologica
 on:
   schedule:
     # Agenda a execução automática de 1 em 1 hora (24 vezes por dia)
-    - cron: '0 * * * *'
+    - cron: '0 */3 * * *'
   workflow_dispatch: # Permite que você clique no botão "Run workflow" para testar manualmente a qualquer hora
 
 jobs:
