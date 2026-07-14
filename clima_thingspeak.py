@@ -26,7 +26,6 @@ def obter_previsao_proximas_24h():
             
             for item in proximos_pontos:
                 timestamp = item.get('dt')
-                # Converte o tempo do ponto para o formato ISO aceito pelo ThingSpeak
                 data_hora_iso = datetime.utcfromtimestamp(timestamp).strftime('%Y-%m-%d %H:%M:%S')
                 
                 umidade = item['main']['humidity']
@@ -72,8 +71,9 @@ def enviar_pontos_sequencial(pontos):
         chuv = ponto["chuva"]
         rad = ponto["radiacao"]
         
-        # Enviando pelo endpoint padrão de atualização (GET tradicional) passando a data futura do ponto
-        url = f"https://api.thingspeak.com/update?api_key={TS_WRITE_KEY}&created_at={created_at}&field1={umid}&field2={chuv}&field3={rad}"
+        # Mapeamento exato com base nas suas caixas de seleção:
+        # field1 = Radiação | field2 = Umidade | field3 = Chuva
+        url = f"https://api.thingspeak.com/update?api_key={TS_WRITE_KEY}&created_at={created_at}&field1={rad}&field2={umid}&field3={chuv}"
         
         try:
             resposta = requests.get(url)
@@ -86,7 +86,6 @@ def enviar_pontos_sequencial(pontos):
             
         # Espera 16 segundos exigidos pela API gratuita antes de enviar o próximo
         if i < len(pontos) - 1:
-            print("Aguardando 16 segundos para o próximo ponto...")
             time.sleep(16)
 
 if __name__ == "__main__":
