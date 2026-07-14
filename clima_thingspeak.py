@@ -1,12 +1,11 @@
 import os
 import requests
-import json
+import time
 from datetime import datetime
 
-# Chaves do cofre do GitHub
-OW_API_KEY = os.environ.get("OPENWEATHER_KEY")
+# Chave do cofre do GitHub
 TS_WRITE_KEY = os.environ.get("THINGSPEAK_KEY")
-TS_CHANNEL_ID = os.environ.get("THINGSPEAK_CHANNEL_ID")
+OW_API_KEY = os.environ.get("OPENWEATHER_KEY")
 
 CITY_NAME = "Indaiatuba"
 COUNTRY_CODE = "BR"
@@ -20,20 +19,20 @@ def obter_previsao_proximas_24h():
         
         if resposta.status_code == 200:
             lista_previsoes = dados.get('list', [])
-            updates = []
+            pontos = []
             
-            # Pega exatamente os próximos 8 pontos de previsão (8 x 3h = 24 horas)
+            # Pega exatamente os próximos 8 pontos (8 x 3h = 24 horas para frente)
             proximos_pontos = lista_previsoes[:8]
             
             for item in proximos_pontos:
                 timestamp = item.get('dt')
-                # Converte para formato esperado pelo ThingSpeak (ISO 8601)
+                # Converte o tempo do ponto para o formato ISO aceito pelo ThingSpeak
                 data_hora_iso = datetime.utcfromtimestamp(timestamp).strftime('%Y-%m-%d %H:%M:%S')
                 
                 umidade = item['main']['humidity']
                 chuva = item.get('rain', {}).get('3h', 0.0)
                 
-                # Cálculo de radiação solar
+                # Estimativa de radiação solar
                 nuvens = item.get('clouds', {}).get('all', 0)
                 hora_ponto = datetime.utcfromtimestamp(timestamp).hour
                 
@@ -44,15 +43,15 @@ def obter_previsao_proximas_24h():
                 else:
                     radiacao = 0.0
                 
-                updates.append({
+                pontos.append({
                     "created_at": data_hora_iso,
-                    "field1": umidade,
-                    "field2": chuva,
-                    "field3": round(radiacao, 1)
+                    "umidade": umidade,
+                    "chuva": chuva,
+                    "radiacao": round(radiacao, 1)
                 })
             
-            print(f"Sucesso! {len(updates)} pontos coletados para as próximas 24h.")
-            return updates
+            print(f"Sucesso! {len(pontos)} pontos coletados da previsão.")
+            return pontos
         else:
             print(f"Erro na API OpenWeather: {dados.get('message')}")
             return []
@@ -60,32 +59,37 @@ def obter_previsao_proximas_24h():
         print(f"Erro de conexão com OpenWeather: {e}")
         return []
 
-def enviar_lote_thingspeak(updates):
-    if not updates:
+def enviar_pontos_sequencial(pontos):
+    if not pontos:
         print("Nenhum dado para enviar.")
         return
         
-    url = f"https://api.thingspeak.com/channels/{TS_CHANNEL_ID}/bulk_update.json"
+    print(f"Iniciando o envio de {len(pontos)} pontos com intervalos de 16 segundos...")
     
-    payload = {
-        "write_api_key": TS_WRITE_KEY,
-        "updates": updates
-    }
-    
-    headers = {'Content-Type': 'application/json'}
-    
-    try:
-        resposta = requests.post(url, data=json.dumps(payload), headers=headers)
-        print(f"Status do ThingSpeak: {resposta.status_code}")
-        print(f"Resposta do ThingSpeak: {resposta.text}")
-        if resposta.status_code in [201, 202]:
-            print("Envio em lote bem-sucedido!")
-        else:
-            print("Falha no envio em lote.")
-    except Exception as e:
-        print(f"Falha de conexão com o ThingSpeak: {e}")
+    for i, ponto in enumerate(pontos):
+        created_at = ponto["created_at"]
+        umid = ponto["umidade"]
+        chuv = ponto["chuva"]
+        rad = ponto["radiacao"]
+        
+        # Enviando pelo endpoint padrão de atualização (GET tradicional) passando a data futura do ponto
+        url = f"https://api.thingspeak.com/update?api_key={TS_WRITE_KEY}&created_at={created_at}&field1={umid}&field2={chuv}&field3={rad}"
+        
+        try:
+            resposta = requests.get(url)
+            if resposta.status_code == 200 and resposta.text != "0":
+                print(f"[{i+1}/{len(pontos)}] Sucesso! Ponto de {created_at} enviado.")
+            else:
+                print(f"[{i+1}/{len(pontos)}] Falha ao enviar ponto de {created_at}. Resposta: {resposta.text}")
+        except Exception as e:
+            print(f"Erro de conexão no ponto de {created_at}: {e}")
+            
+        # Espera 16 segundos exigidos pela API gratuita antes de enviar o próximo
+        if i < len(pontos) - 1:
+            print("Aguardando 16 segundos para o próximo ponto...")
+            time.sleep(16)
 
 if __name__ == "__main__":
-    pontos = obter_previsao_proximas_24h()
-    if pontos:
-        enviar_lote_thingspeak(pontos)
+    previsao = obter_previsao_proximas_24h()
+    if previsao:
+        enviar_pontos_sequencial(previsao)
