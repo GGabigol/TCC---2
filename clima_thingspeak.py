@@ -1,58 +1,89 @@
 import os
 import requests
+import json
+from datetime import datetime
 
-# O GitHub Actions vai pegar as chaves diretamente do cofre (Secrets)
+# Chaves obtidas do cofre de Secrets do GitHub
 OW_API_KEY = os.environ.get("OPENWEATHER_KEY")
 TS_WRITE_KEY = os.environ.get("THINGSPEAK_KEY")
+TS_CHANNEL_ID = os.environ.get("THINGSPEAK_CHANNEL_ID")
 
 CITY_NAME = "Indaiatuba"
 COUNTRY_CODE = "BR"
 
-def obter_dados_clima():
-    url = f"http://api.openweathermap.org/data/2.5/weather?q={CITY_NAME},{COUNTRY_CODE}&appid={OW_API_KEY}&units=metric&lang=pt_br"
+def obter_previsao_5_dias():
+    # API de previsão para 5 dias (dados detalhados de 3 em 3 horas)
+    url = f"http://api.openweathermap.org/data/2.5/forecast?q={CITY_NAME},{COUNTRY_CODE}&appid={OW_API_KEY}&units=metric&lang=pt_br"
     
     try:
         resposta = requests.get(url)
         dados = resposta.json()
         
         if resposta.status_code == 200:
-            umidade = dados['main']['humidity']
-            chuva = dados.get('rain', {}).get('1h', 0.0)
+            lista_previsoes = dados.get('list', [])
+            updates = []
             
-            # Cálculo de radiação solar estimada com base nas nuvens e hora
-            nuvens = dados.get('clouds', {}).get('all', 0)
-            from datetime import datetime
-            hora_atual = datetime.now().hour
-            
-            if 6 <= hora_atual <= 18:
-                fator_solar = max(0, 1 - abs(12 - hora_atual) / 6) 
-                radiacao_maxima = 1000 * fator_solar
-                radiacao = radiacao_maxima * (1 - 0.75 * (nuvens / 100))
-            else:
-                radiacao = 0.0
+            for item in lista_previsoes:
+                # Extrai o carimbo de data/hora futura
+                timestamp = item.get('dt')
+                # Converte o tempo Unix para o formato padrão do ThingSpeak (ISO 8601)
+                data_hora_iso = datetime.utcfromtimestamp(timestamp).strftime('%Y-%m-%d %H:%M:%S')
                 
-            print(f"Dados obtidos: Umidade={umidade}%, Chuva={chuva}mm, Radiação={round(radiacao, 1)} W/m²")
-            return umidade, chuva, round(radiacao, 1)
+                umidade = item['main']['humidity']
+                chuva = item.get('rain', {}).get('3h', 0.0)  # Chuva acumulada em 3 horas
+                
+                # Estimativa de radiação solar calculada com base em nuvens e horário
+                nuvens = item.get('clouds', {}).get('all', 0)
+                hora_ponto = datetime.utcfromtimestamp(timestamp).hour
+                
+                if 6 <= hora_ponto <= 18:
+                    fator_solar = max(0, 1 - abs(12 - hora_ponto) / 6) 
+                    radiacao_maxima = 1000 * fator_solar
+                    radiacao = radiacao_maxima * (1 - 0.75 * (nuvens / 100))
+                else:
+                    radiacao = 0.0
+                
+                # Monta a estrutura correta exigida pela API de lote do ThingSpeak
+                updates.append({
+                    "created_at": data_hora_iso,
+                    "field1": umidade,
+                    "field2": chuva,
+                    "field3": round(radiacao, 1)
+                })
+                
+            print(f"Previsão de {len(updates)} pontos obtida com sucesso!")
+            return updates
         else:
             print(f"Erro na API OpenWeather: {dados.get('message')}")
-            return None, None, None
+            return []
     except Exception as e:
         print(f"Erro de conexão com OpenWeather: {e}")
-        return None, None, None
+        return []
 
-def enviar_para_thingspeak(umidade, chuva, radiacao):
-    # Field 1 = Umidade | Field 2 = Chuva | Field 3 = Radiação
-    url = f"https://api.thingspeak.com/update?api_key={TS_WRITE_KEY}&field1={umidade}&field2={chuva}&field3={radiacao}"
+def enviar_lote_thingspeak(updates):
+    if not updates:
+        print("Sem novos dados para atualizar.")
+        return
+        
+    url = f"https://api.thingspeak.com/channels/{TS_CHANNEL_ID}/bulk_update.json"
+    
+    payload = {
+        "write_api_key": TS_WRITE_KEY,
+        "updates": updates
+    }
+    
+    headers = {'Content-Type': 'application/json'}
+    
     try:
-        resposta = requests.get(url)
-        if resposta.status_code == 200 and resposta.text != "0":
-            print("Sucesso! Dados numéricos enviados para o ThingSpeak.")
+        resposta = requests.post(url, data=json.dumps(payload), headers=headers)
+        if resposta.status_code == 202 or resposta.status_code == 201:
+            print("Sucesso! Previsão para os próximos 5 dias carregada no ThingSpeak.")
         else:
-            print("Erro ao enviar dados para o ThingSpeak.")
+            print(f"Erro no envio em lote: {resposta.status_code} - {resposta.text}")
     except Exception as e:
-        print(f"Falha de conexão com o ThingSpeak: {e}")
+        print(f"Falha de conexão com o ThingSpeak ao enviar lote: {e}")
 
 if __name__ == "__main__":
-    umid, chuv, rad = obter_dados_clima()
-    if umid is not None:
-        enviar_para_thingspeak(umid, chuv, rad)
+    previsoes = obter_previsao_5_dias()
+    if previsoes:
+        enviar_lote_thingspeak(previsoes)
