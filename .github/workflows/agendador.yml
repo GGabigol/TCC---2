@@ -26,4 +26,4 @@ jobs:
           pip install requests
 
       - name: Executar o Script Python
-        run: python main.py
+  run: python NOME_DO_SEU_ARQUIVO.py
