@@ -2,7 +2,7 @@ name: Executar Estacao Meteorologica
 
 on:
   schedule:
-    # Roda de 30 em 30 minutos das 06:00 às 19:00 (Horário de Brasília)
+    # ☀️ Roda de 30 em 30 minutos das 06:00 às 19:00 no horário de Brasília (09:00 às 22:00 UTC)
     - cron: '*/30 9-22 * * *'
 
   workflow_dispatch:
@@ -26,4 +26,4 @@ jobs:
           pip install requests
 
       - name: Executar o Script Python
-        run: python NOME_DO_SEU_ARQUIVO.py
+        run: python clima_thingspeak.py
