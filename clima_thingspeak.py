@@ -11,7 +11,7 @@ CITY_NAME = "Indaiatuba"
 COUNTRY_CODE = "BR"
 
 def obter_clima_atual():
-    # Usa a API de Clima Atual (Weather) em vez da previsão estendida para garantir dados em tempo real
+    # Usa a API de Clima Atual em tempo real
     url = f"http://api.openweathermap.org/data/2.5/weather?q={CITY_NAME},{COUNTRY_CODE}&appid={OW_API_KEY}&units=metric&lang=pt_br"
     
     try:
@@ -28,7 +28,7 @@ def obter_clima_atual():
             # Hora atual no UTC
             hora_ponto = datetime.now(timezone.utc).hour
             
-            # Ajuste aproximado para o horário local de Indaiatuba (UTC-3)
+            # Ajuste aproximado para o horário local (UTC-3)
             hora_local = (hora_ponto - 3) % 24
             
             if 6 <= hora_local <= 18:
@@ -66,7 +66,7 @@ def enviar_thingspeak(ponto):
     umid = ponto["umidade"]
     chuv = ponto["chuva"]
     
-    # Envia o ponto diretamente no momento atual (sem forçar data passada/futura no ThingSpeak)
+    # Envia o ponto diretamente no tempo presente
     url = f"https://api.thingspeak.com/update?api_key={TS_WRITE_KEY}&field1={rad}&field2={umid}&field3={chuv}"
     
     try:
