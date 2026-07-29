@@ -25,8 +25,7 @@ jobs:
 
       - name: Executar o script da Estacao Meteorologica
         env:
-          # Adicione aqui suas secrets do GitHub se o seu script utilizar
           THINGSPEAK_API_KEY: ${{ secrets.THINGSPEAK_API_KEY }}
           OPENWEATHER_API_KEY: ${{ secrets.OPENWEATHER_API_KEY }}
         run: |
-          python main.py # Altere 'main.py' se o seu arquivo Python tiver outro nome
+          python clima_thingspeak.py
